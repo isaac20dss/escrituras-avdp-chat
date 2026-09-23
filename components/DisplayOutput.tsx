@@ -28,6 +28,11 @@ const makeFocusOverlayHTML = (html: string, phrase: string): string => {
   );
 };
 
+// Tolerância de parada automática: quantas linhas em branco rolam após o fim do texto
+const END_TOLERANCE_LINES = 2;
+// Altura de linha do corpo (classe leading-relaxed = 1.625)
+const BODY_LINE_HEIGHT = 1.625;
+
 const DisplayOutput: React.FC = () => {
   const [state, setState] = useState<TeleprompterState>(DEFAULT_STATE);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -103,6 +108,23 @@ const DisplayOutput: React.FC = () => {
           const pixelsToScroll = (pixelsPerSecond * delta) / 1000;
 
           scrollRef.current.scrollTop += pixelsToScroll;
+
+          // Parada automática ao chegar no fim do texto (+ tolerância de linhas em branco).
+          // Desliga isScrolling e avisa o painel para o botão voltar para "ROLAR".
+          const endEl = scrollRef.current;
+          if (
+            stateRef.current.mode !== 'chat' &&
+            endEl.scrollHeight > endEl.clientHeight &&
+            endEl.scrollTop >= endEl.scrollHeight - endEl.clientHeight - 1
+          ) {
+            const stoppedState = { ...stateRef.current, isScrolling: false, scrollTop: 1 };
+            stateRef.current = stoppedState;
+            setState(stoppedState);
+            channelRef.current?.postMessage(stoppedState);
+            stateSyncService.send(stoppedState);
+            animationFrameRef.current = null;
+            return;
+          }
 
           const now = Date.now();
           if (now - lastBroadcastRef.current > 100) {
@@ -247,7 +269,11 @@ const DisplayOutput: React.FC = () => {
               )}
             </div>
           ) : (
-            <div className="min-h-full pb-[600px]">
+            // shrink-0: sem isso o flex-col encolhe esta div e o padding inferior é descartado
+            <div
+              className="min-h-full shrink-0"
+              style={{ paddingBottom: `${END_TOLERANCE_LINES * state.fontSize * BODY_LINE_HEIGHT}px` }}
+            >
               <h1 className="text-4xl font-bold leading-tight text-blue-400 mb-8 drop-shadow-md text-left font-sans tracking-wide uppercase">
                 {state.selectedTitle}
               </h1>
