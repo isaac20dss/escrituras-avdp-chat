@@ -493,8 +493,10 @@ const ControlPanel: React.FC = () => {
       setSections(data);
       setLastUpdated(new Date());
     } catch (err) {
-      setError("Failed to load script. Check permissions or URL.");
-      setSections([]);
+      // Mantém as escrituras já carregadas na tela se a atualização falhar
+      console.error("Erro ao carregar o documento:", err);
+      const reason = err instanceof Error ? err.message : String(err);
+      setError(`Não foi possível carregar o documento. Verifique se o INICIAR.bat / server.cjs está aberto e se o Doc está compartilhado. (${reason})`);
     } finally {
       setLoading(false);
     }

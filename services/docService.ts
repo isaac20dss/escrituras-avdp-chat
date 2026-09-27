@@ -16,11 +16,30 @@ export const extractDocId = (input: string): string => {
   return '';
 };
 
-// Fallback proxies to handle CORS or downtime issues
+// Servidor local (server.cjs) busca o Doc direto do Google, sem CORS.
+// Os proxies públicos ficam só como reserva, pois são instáveis e têm limite de uso.
+const LOCAL_DOC_URL = (docId: string) => `http://localhost:3001/doc?id=${encodeURIComponent(docId)}`;
+
 const PROXIES = [
   (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
   (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
 ];
+
+const FETCH_TIMEOUT_MS = 20000;
+
+const fetchText = async (url: string): Promise<string> => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`Status ${response.status}: ${(await response.text()).slice(0, 200)}`);
+    }
+    return await response.text();
+  } finally {
+    clearTimeout(timer);
+  }
+};
 
 export const fetchScriptSections = async (docId: string = DEFAULT_DOC_ID): Promise<ScriptSection[]> => {
   // Add timestamp to prevent caching
@@ -30,18 +49,15 @@ export const fetchScriptSections = async (docId: string = DEFAULT_DOC_ID): Promi
   let lastError = null;
   let success = false;
 
-  // Try proxies sequentially
-  for (const proxyGen of PROXIES) {
+  // Tenta o servidor local primeiro e depois os proxies públicos
+  const sources = [LOCAL_DOC_URL(docId), ...PROXIES.map(proxyGen => proxyGen(exportUrl))];
+  for (const url of sources) {
     try {
-      const response = await fetch(proxyGen(exportUrl));
-      if (!response.ok) {
-        throw new Error(`Proxy returned status: ${response.status}`);
-      }
-      htmlText = await response.text();
+      htmlText = await fetchText(url);
       success = true;
       break; // Stop if successful
     } catch (e) {
-      console.warn("Proxy attempt failed, trying next...", e);
+      console.warn("Doc fetch attempt failed, trying next...", url, e);
       lastError = e;
     }
   }
