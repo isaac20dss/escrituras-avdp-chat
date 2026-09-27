@@ -1,6 +1,7 @@
 import React from 'react';
 import { MessageSquare, Users } from 'lucide-react';
 import { TeleprompterState } from '../types';
+import Avatar from './Avatar';
 
 /**
  * Cartão do teleprompter (560x940) compartilhado pelo Display (OBS) e pelo
@@ -115,19 +116,15 @@ const TeleprompterCard: React.FC<TeleprompterCardProps> = ({
                     const authorName = user.author || 'Anônimo';
                     const companions = Array.isArray(user.companions) ? user.companions : [];
                     const allNames = formatNamesList([authorName, ...companions]);
-                    const initialChar = (typeof authorName === 'string' && authorName.trim().length > 0)
-                      ? authorName.trim().charAt(0).toUpperCase()
-                      : '?';
 
                     return (
                       <div key={user.author || idx} className="bg-black/60 border border-white/10 rounded-xl p-5 shadow-lg backdrop-blur-sm animate-in slide-in-from-bottom-2 fade-in duration-300 flex items-center gap-4">
-                        {user.avatarUrl ? (
-                          <img src={user.avatarUrl} alt={authorName} className="w-14 h-14 rounded-full object-cover border-2 border-white/20 shrink-0 shadow-md" />
-                        ) : (
-                          <div className="w-14 h-14 rounded-full bg-red-600/30 border-2 border-red-500/30 flex items-center justify-center font-bold text-red-300 text-lg shrink-0 shadow-md">
-                            {initialChar}
-                          </div>
-                        )}
+                        <Avatar
+                          url={user.avatarUrl}
+                          name={authorName}
+                          className="w-14 h-14 rounded-full object-cover border-2 border-white/20 shrink-0 shadow-md"
+                          fallbackClassName="w-14 h-14 rounded-full bg-red-600/30 border-2 border-red-500/30 flex items-center justify-center font-bold text-red-300 text-lg shrink-0 shadow-md"
+                        />
                         <div className="flex flex-col justify-center min-w-0 flex-1 gap-1">
                           <p className="font-bold text-white leading-tight" style={{ fontSize: `${state.fontSize * 0.85}px` }}>
                             {allNames}
@@ -154,13 +151,12 @@ const TeleprompterCard: React.FC<TeleprompterCardProps> = ({
                 <div className="flex flex-col gap-4">
                   {state.chatMessages.map(msg => (
                     <div key={msg.id} className="bg-black/60 border border-white/10 rounded-xl p-4 shadow-lg backdrop-blur-sm animate-in slide-in-from-bottom-2 fade-in duration-300 flex items-start gap-3">
-                      {msg.avatarUrl ? (
-                        <img src={msg.avatarUrl} alt={msg.author || 'Anônimo'} className="w-10 h-10 rounded-full object-cover border border-white/20 shrink-0 mt-0.5" />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-red-600/30 border border-red-500/30 flex items-center justify-center font-bold text-red-300 shrink-0 mt-0.5">
-                          {(msg.author && typeof msg.author === 'string' && msg.author.trim().length > 0) ? msg.author.trim().charAt(0).toUpperCase() : '?'}
-                        </div>
-                      )}
+                      <Avatar
+                        url={msg.avatarUrl}
+                        name={msg.author}
+                        className="w-10 h-10 rounded-full object-cover border border-white/20 shrink-0 mt-0.5"
+                        fallbackClassName="w-10 h-10 rounded-full bg-red-600/30 border border-red-500/30 flex items-center justify-center font-bold text-red-300 shrink-0 mt-0.5"
+                      />
                       <div className="flex-1 overflow-hidden">
                         <p className="font-bold text-red-400 mb-1 truncate" style={{ fontSize: `${state.fontSize * 0.7}px` }}>
                           {msg.author}

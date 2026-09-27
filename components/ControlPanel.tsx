@@ -8,6 +8,7 @@ import { stateSyncService } from '../services/stateSync';
 import { youtubeService } from '../services/youtubeService';
 import { voiceService } from '../services/voiceService';
 import { audienceDatabaseService } from '../services/audienceDatabaseService';
+import Avatar from './Avatar';
 import TeleprompterCard, { CARD_WIDTH, CARD_HEIGHT, formatNamesList } from './TeleprompterCard';
 
 const ControlPanel: React.FC = () => {
@@ -927,13 +928,12 @@ const ControlPanel: React.FC = () => {
                               <div className="flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-2 overflow-hidden flex-1">
                                   {/* Foto de perfil */}
-                                  {user.avatarUrl ? (
-                                    <img src={user.avatarUrl} alt={user.author || 'Anônimo'} className="w-7 h-7 rounded-full object-cover shrink-0 border border-white/20" />
-                                  ) : (
-                                    <div className="w-7 h-7 rounded-full bg-red-900/50 border border-red-700/50 flex items-center justify-center font-bold text-[10px] text-red-300 shrink-0">
-                                      {(user.author && typeof user.author === 'string' && user.author.trim().length > 0) ? user.author.trim().charAt(0).toUpperCase() : '?'}
-                                    </div>
-                                  )}
+                                  <Avatar
+                                    url={user.avatarUrl}
+                                    name={user.author}
+                                    className="w-7 h-7 rounded-full object-cover shrink-0 border border-white/20"
+                                    fallbackClassName="w-7 h-7 rounded-full bg-red-900/50 border border-red-700/50 flex items-center justify-center font-bold text-[10px] text-red-300 shrink-0"
+                                  />
 
                                   <div className="flex flex-col min-w-0 flex-1">
                                     <span className="font-bold truncate text-white leading-tight">{user.author}</span>
@@ -1027,13 +1027,12 @@ const ControlPanel: React.FC = () => {
                       audienceDatabaseService.getAllStats().map((rec, i) => (
                         <div key={i} className="bg-gray-800/60 border border-gray-700/60 rounded-xl p-3 flex items-center justify-between gap-3">
                           <div className="flex items-center gap-3">
-                            {rec.avatarUrl ? (
-                              <img src={rec.avatarUrl} alt={rec.author} className="w-9 h-9 rounded-full object-cover shrink-0 border border-white/10" />
-                            ) : (
-                              <div className="w-9 h-9 rounded-full bg-blue-900/40 border border-blue-700/40 flex items-center justify-center font-bold text-xs text-blue-300 shrink-0">
-                                {rec.author.charAt(0).toUpperCase()}
-                              </div>
-                            )}
+                            <Avatar
+                              url={rec.avatarUrl}
+                              name={rec.author}
+                              className="w-9 h-9 rounded-full object-cover shrink-0 border border-white/10"
+                              fallbackClassName="w-9 h-9 rounded-full bg-blue-900/40 border border-blue-700/40 flex items-center justify-center font-bold text-xs text-blue-300 shrink-0"
+                            />
                             <div className="flex flex-col">
                               <span className="font-bold text-xs text-white">{rec.author}</span>
                               {rec.defaultLocation ? (

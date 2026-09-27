@@ -9,6 +9,8 @@
  *
  *   - Buscar o Google Doc (rota HTTP GET /doc?id=...) direto do Node, sem
  *     depender de proxies CORS públicos, que são instáveis.
+ *   - Servir fotos de perfil do YouTube (GET /avatar?url=...) quando o
+ *     navegador não consegue carregá-las direto (bloqueio por Referer).
  *
  * Porta padrão: 3001
  * Uso: node server.cjs
@@ -51,9 +53,53 @@ const fetchDocHtml = async (docId) => {
   throw lastError;
 };
 
+// Fotos de perfil já baixadas (url -> { type, body })
+const avatarCache = new Map();
+const AVATAR_CACHE_MAX = 500;
+const AVATAR_HOSTS = /(^|\.)(ggpht\.com|googleusercontent\.com|ytimg\.com)$/;
+
+const handleAvatar = async (reqUrl, res) => {
+  let target;
+  try {
+    target = new URL(reqUrl.searchParams.get('url') || '');
+  } catch {
+    res.writeHead(400).end();
+    return;
+  }
+  // Só repassa imagens do YouTube/Google, para não virar um proxy aberto
+  if (target.protocol !== 'https:' || !AVATAR_HOSTS.test(target.hostname)) {
+    res.writeHead(400).end();
+    return;
+  }
+
+  const key = target.toString();
+  let cached = avatarCache.get(key);
+  if (!cached) {
+    try {
+      // Sem Referer: é o que o YouTube bloqueia nas fotos personalizadas
+      const response = await fetch(key, { signal: AbortSignal.timeout(10000) });
+      const type = response.headers.get('content-type') || '';
+      if (!response.ok || !type.startsWith('image/')) throw new Error(`status ${response.status}`);
+      cached = { type, body: Buffer.from(await response.arrayBuffer()) };
+      if (avatarCache.size >= AVATAR_CACHE_MAX) avatarCache.delete(avatarCache.keys().next().value);
+      avatarCache.set(key, cached);
+    } catch (e) {
+      console.warn('[AVATAR] Não foi possível baixar a foto:', e.message);
+      res.writeHead(502).end();
+      return;
+    }
+  }
+  res.writeHead(200, { 'Content-Type': cached.type, 'Cache-Control': 'public, max-age=86400' }).end(cached.body);
+};
+
 const httpServer = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   const reqUrl = new URL(req.url, `http://localhost:${PORT}`);
+
+  if (req.method === 'GET' && reqUrl.pathname === '/avatar') {
+    await handleAvatar(reqUrl, res);
+    return;
+  }
 
   if (req.method !== 'GET' || reqUrl.pathname !== '/doc') {
     res.writeHead(404).end();
