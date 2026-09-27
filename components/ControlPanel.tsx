@@ -8,7 +8,7 @@ import { stateSyncService } from '../services/stateSync';
 import { youtubeService } from '../services/youtubeService';
 import { voiceService } from '../services/voiceService';
 import { audienceDatabaseService } from '../services/audienceDatabaseService';
-import { formatNamesList } from './DisplayOutput';
+import TeleprompterCard, { CARD_WIDTH, CARD_HEIGHT, formatNamesList } from './TeleprompterCard';
 
 const ControlPanel: React.FC = () => {
   const [sections, setSections] = useState<ScriptSection[]>([]);
@@ -420,9 +420,9 @@ const ControlPanel: React.FC = () => {
     if (!previewContainerRef.current) return;
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        const width = entry.contentRect.width;
-        if (width > 0) {
-          setPreviewScale(width / 560);
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          setPreviewScale(Math.min(1, width / CARD_WIDTH, height / CARD_HEIGHT));
         }
       }
     });
@@ -553,7 +553,7 @@ const ControlPanel: React.FC = () => {
     const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return html.replace(
       new RegExp(`(${escaped})(?![^<>]*>)`, 'gi'),
-      '<mark class="tp-search-mark" style="background:rgba(250,204,21,0.4);border-radius:2px;padding:0 2px;color:inherit;">$1</mark>'
+      '<mark class="tp-search-mark" style="background:rgba(250,204,21,0.4);border-radius:2px;box-shadow:0 0 0 2px rgba(250,204,21,0.4);color:inherit;">$1</mark>'
     );
   };
 
@@ -576,7 +576,6 @@ const ControlPanel: React.FC = () => {
     return (plain.match(new RegExp(escaped, 'gi')) || []).length;
   })();
 
-  const bodyClasses = "leading-relaxed text-white font-sans text-left [&>p]:mb-6 [&>ul]:mb-6 [&>ol]:mb-6 [&>ul]:list-disc [&>ul]:pl-6 [&>ol]:list-decimal [&>ol]:pl-6";
 
   const toggleVisibility = () => updateState({ isVisible: !state.isVisible });
   const toggleScroll = () => updateState({ isScrolling: !state.isScrolling });
@@ -1225,235 +1224,109 @@ const ControlPanel: React.FC = () => {
             <span className="text-sm font-semibold tracking-widest uppercase text-gray-400">{state.isVisible ? 'NO AR' : 'OFFLINE'}</span>
           </div>
 
-          {/* Monitor de Script proporcional ao Display Output (560:940) */}
-          <div 
-            ref={previewContainerRef}
-            className="relative w-full max-w-[560px] aspect-[560/940] flex-1 min-h-0 backdrop-blur-[10px] rounded-xl border border-gray-700 flex flex-col overflow-hidden shadow-2xl mx-auto transition-colors duration-300"
-            style={{ 
-              backgroundColor: `rgba(0, 0, 0, ${state.bgOpacity ?? 0.6})`,
-              perspective: `${1800 * previewScale}px`
-            }}
-          >
-            <div className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-black/60 to-transparent z-10 pointer-events-none" />
-
-            {/* Barra de cabeçalho do monitor */}
-            <div className="absolute top-2 left-4 right-4 flex items-center justify-between z-20 gap-2">
-              <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest flex-shrink-0">
-                Monitor (560x940)
-              </span>
-
-              {/* Campo de busca */}
-              <div className={`flex items-center gap-1.5 flex-1 min-w-0 transition-all duration-200 ${
-                showSearch ? 'opacity-100' : 'opacity-0 pointer-events-none w-0'
-              }`}>
-                <div className="flex items-center gap-1 bg-gray-800/80 border border-gray-600 rounded-full px-2 py-0.5 flex-1 min-w-0">
-                  <Search size={9} className="text-gray-500 flex-shrink-0" />
-                  <input
-                    ref={searchInputRef}
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Buscar no texto..."
-                    className="bg-transparent text-[10px] text-white placeholder-gray-600 outline-none w-full"
-                  />
-                  {searchQuery && (
-                    <span className="text-[9px] text-gray-500 flex-shrink-0">
-                      {searchMatchCount > 0 ? `${searchMatchCount}` : '0'}
-                    </span>
-                  )}
-                </div>
-                {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} className="text-gray-600 hover:text-gray-400">
-                    <X size={10} />
-                  </button>
-                )}
-              </div>
-
-              {/* Controles do lado direito */}
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                {/* Toggle busca */}
-                <button
-                  onClick={() => {
-                    setShowSearch(prev => {
-                      const next = !prev;
-                      if (next) setTimeout(() => searchInputRef.current?.focus(), 50);
-                      if (!next) setSearchQuery('');
-                      return next;
-                    });
-                  }}
-                  className={`p-1 rounded transition-colors ${
-                    showSearch ? 'text-blue-400 bg-blue-500/20' : 'text-gray-600 hover:text-gray-400'
-                  }`}
-                  title="Buscar no texto"
-                >
-                  <Search size={11} />
-                </button>
-
-                {/* Chip do highlight ativo */}
-                {state.highlightedText ? (
-                  <div className="flex items-center gap-1">
-                    <div className="flex items-center gap-1 bg-white/10 border border-white/20 rounded-full px-2 py-0.5 max-w-[120px]">
-                      <Highlighter size={8} className="text-gray-300 flex-shrink-0" />
-                      <span className="text-[9px] text-gray-300 truncate">{state.highlightedText}</span>
-                    </div>
-                    <button onClick={clearHighlight} className="text-gray-600 hover:text-red-400 transition-colors">
-                      <X size={11} />
-                    </button>
-                  </div>
-                ) : (
-                  <span className="text-[9px] text-gray-600 italic">Selecione para focar</span>
-                )}
-              </div>
-            </div>
-            
-            <div 
-              ref={previewScrollRef}
-              onScroll={handleManualScroll}
-              onMouseUp={handlePreviewMouseUp}
-              className="flex-1 overflow-y-auto no-scrollbar relative select-text cursor-text transition-transform duration-300 ease-out"
-              style={{ 
-                padding: `${40 * previewScale}px`,
-                scrollbarWidth: 'none',
-                msOverflowStyle: 'none',
-                transform: `perspective(${1800 * previewScale}px) rotateY(${state.rotateY ?? 0}deg)`,
-                transformStyle: 'preserve-3d',
-                backfaceVisibility: 'visible',
-              }}
+          {/* Monitor de Script: o MESMO cartão do Display (560x940) em tamanho real,
+              reduzido com transform: scale(). Garante a mesma quebra de linha,
+              a mesma proporção e a mesma posição de rolagem do OBS. */}
+          <div ref={previewContainerRef} className="relative w-full flex-1 min-h-0 flex items-center justify-center">
+            <div
+              className="relative shrink-0"
+              style={{ width: `${CARD_WIDTH * previewScale}px`, height: `${CARD_HEIGHT * previewScale}px` }}
             >
-              {state.mode === 'chat' ? (
-                <div className="flex flex-col min-h-full pb-8">
-                  {state.chatSubMode === 'presence' ? (
-                    (presenceUsers && presenceUsers.length > 0) ? (
-                      <div className="flex flex-col gap-4">
-                        {presenceUsers.map((user, idx) => {
-                          if (!user || !user.author) return null;
-                          const authorName = user.author || 'Anônimo';
-                          const companions = Array.isArray(user.companions) ? user.companions : [];
-                          const allNames = formatNamesList([authorName, ...companions]);
-                          const initialChar = (typeof authorName === 'string' && authorName.trim().length > 0)
-                            ? authorName.trim().charAt(0).toUpperCase()
-                            : '?';
+              <div
+                style={{
+                  width: `${CARD_WIDTH}px`,
+                  height: `${CARD_HEIGHT}px`,
+                  transform: `scale(${previewScale})`,
+                  transformOrigin: 'top left',
+                  perspective: '1800px',
+                }}
+              >
+                <TeleprompterCard
+                  state={state}
+                  scrollRef={previewScrollRef}
+                  visible={true}
+                  onScroll={handleManualScroll}
+                  onMouseUp={handlePreviewMouseUp}
+                  scrollClassName="select-text cursor-text"
+                  bodyHtml={applySearchMarks(state.selectedBody, searchQuery)}
+                  focusText={searchQuery ? '' : state.highlightedText}
+                  emptyScriptPlaceholder={
+                    <div className="h-full flex items-center justify-center text-gray-600 italic">Selecione uma escritura no menu lateral...</div>
+                  }
+                />
+              </div>
 
-                          return (
-                            <div key={user.author || idx} className="bg-black/60 border border-white/10 rounded-xl p-4 shadow-lg backdrop-blur-sm animate-in slide-in-from-bottom-2 fade-in duration-300 flex items-center gap-3">
-                              {user.avatarUrl ? (
-                                <img src={user.avatarUrl} alt={authorName} className="rounded-full object-cover border-2 border-white/20 shrink-0 shadow-md" style={{ width: `${48 * previewScale}px`, height: `${48 * previewScale}px` }} />
-                              ) : (
-                                <div className="rounded-full bg-red-600/30 border-2 border-red-500/30 flex items-center justify-center font-bold text-red-300 shrink-0 shadow-md" style={{ width: `${48 * previewScale}px`, height: `${48 * previewScale}px`, fontSize: `${16 * previewScale}px` }}>
-                                  {initialChar}
-                                </div>
-                              )}
-                              <div className="flex flex-col justify-center min-w-0 flex-1 gap-0.5">
-                                <p className="font-bold text-white leading-tight" style={{ fontSize: `${(state.fontSize * 0.85) * previewScale}px` }}>
-                                  {allNames}
-                                </p>
-                                {user.location && (
-                                  <p className="font-semibold text-white/80 leading-tight" style={{ fontSize: `${(state.fontSize * 0.75) * previewScale}px` }}>
-                                    {user.location}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="flex-1 flex flex-col items-center justify-center text-gray-500 italic text-center h-full">
-                        <Users size={32} className="mb-2 opacity-50" />
-                        Aguardando a chegada dos participantes...
-                      </div>
-                    )
-                  ) : (
-                    (state.chatMessages && state.chatMessages.length > 0) ? (
-                      <div className="flex flex-col gap-4">
-                        {state.chatMessages.map(msg => (
-                          <div key={msg.id} className="bg-black/60 border border-white/10 rounded-xl p-4 shadow-lg backdrop-blur-sm animate-in slide-in-from-bottom-2 fade-in duration-300 flex items-start gap-2.5">
-                            {msg.avatarUrl ? (
-                              <img src={msg.avatarUrl} alt={msg.author || 'Anônimo'} className="rounded-full object-cover border border-white/20 shrink-0 mt-0.5" style={{ width: `${32 * previewScale}px`, height: `${32 * previewScale}px` }} />
-                            ) : (
-                              <div className="rounded-full bg-red-600/30 border border-red-500/30 flex items-center justify-center font-bold text-red-300 shrink-0 mt-0.5" style={{ width: `${32 * previewScale}px`, height: `${32 * previewScale}px`, fontSize: `${12 * previewScale}px` }}>
-                                {(msg.author && typeof msg.author === 'string' && msg.author.trim().length > 0) ? msg.author.trim().charAt(0).toUpperCase() : '?'}
-                              </div>
-                            )}
-                            <div className="flex-1 overflow-hidden">
-                              <p className="font-bold text-red-400 mb-1 truncate" style={{ fontSize: `${(state.fontSize * 0.7) * previewScale}px` }}>
-                                {msg.author}
-                              </p>
-                              <p className="text-white leading-snug" style={{ fontSize: `${state.fontSize * previewScale}px` }}>
-                                {msg.text}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex-1 flex flex-col items-center justify-center text-gray-500 italic text-center h-full">
-                        <MessageSquare size={32} className="mb-2 opacity-50" />
-                        Aguardando mensagens do chat...
-                      </div>
-                    )
+              {/* Barra de cabeçalho do monitor */}
+              <div className="absolute top-2 left-4 right-4 flex items-center justify-between z-20 gap-2">
+                <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest flex-shrink-0">
+                  Monitor (560x940)
+                </span>
+
+                {/* Campo de busca */}
+                <div className={`flex items-center gap-1.5 flex-1 min-w-0 transition-all duration-200 ${
+                  showSearch ? 'opacity-100' : 'opacity-0 pointer-events-none w-0'
+                }`}>
+                  <div className="flex items-center gap-1 bg-gray-800/80 border border-gray-600 rounded-full px-2 py-0.5 flex-1 min-w-0">
+                    <Search size={9} className="text-gray-500 flex-shrink-0" />
+                    <input
+                      ref={searchInputRef}
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Buscar no texto..."
+                      className="bg-transparent text-[10px] text-white placeholder-gray-600 outline-none w-full"
+                    />
+                    {searchQuery && (
+                      <span className="text-[9px] text-gray-500 flex-shrink-0">
+                        {searchMatchCount > 0 ? `${searchMatchCount}` : '0'}
+                      </span>
+                    )}
+                  </div>
+                  {searchQuery && (
+                    <button onClick={() => setSearchQuery('')} className="text-gray-600 hover:text-gray-400">
+                      <X size={10} />
+                    </button>
                   )}
                 </div>
-              ) : (
-                state.selectedTitle ? (
-                  <div className="min-h-full pb-[600px]">
-                    <h1 
-                      className="font-bold leading-tight text-blue-400 drop-shadow-md text-left font-sans tracking-wide uppercase"
-                      style={{
-                        fontSize: `${36 * previewScale}px`,
-                        marginBottom: `${32 * previewScale}px`,
-                      }}
-                    >
-                      {state.selectedTitle}
-                    </h1>
 
-                    {/* Preview com blur de foco (duas camadas) + busca */}
-                    <div style={{ position: 'relative' }}>
+                {/* Controles do lado direito */}
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {/* Toggle busca */}
+                  <button
+                    onClick={() => {
+                      setShowSearch(prev => {
+                        const next = !prev;
+                        if (next) setTimeout(() => searchInputRef.current?.focus(), 50);
+                        if (!next) setSearchQuery('');
+                        return next;
+                      });
+                    }}
+                    className={`p-1 rounded transition-colors ${
+                      showSearch ? 'text-blue-400 bg-blue-500/20' : 'text-gray-600 hover:text-gray-400'
+                    }`}
+                    title="Buscar no texto"
+                  >
+                    <Search size={11} />
+                  </button>
 
-                      {/* Camada 1: texto completo com busca marcada, desfocado quando há foco ativo */}
-                      <div
-                        className={bodyClasses}
-                        style={{
-                          fontSize: `${state.fontSize * previewScale}px`,
-                          filter: (state.highlightedText && !searchQuery) ? `blur(${(state.blurAmount ?? 6) * previewScale}px)` : 'none',
-                          opacity: (state.highlightedText && !searchQuery) ? (state.blurOpacity ?? 0.18) : 1,
-                          transition: 'filter 0.45s ease, opacity 0.45s ease',
-                          willChange: 'filter, opacity',
-                        }}
-                        dangerouslySetInnerHTML={{ __html: applySearchMarks(state.selectedBody, searchQuery) }}
-                      />
-
-                      {/* Camada 2: overlay (só aparece quando há foco E sem busca ativa) */}
-                      {state.highlightedText && !searchQuery && (() => {
-                        const escaped = state.highlightedText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                        const overlayHTML = state.selectedBody.replace(
-                          new RegExp(`(${escaped})(?![^<>]*>)`, 'gi'),
-                          '<mark style="color:white;background:transparent;font-weight:inherit;font-size:inherit;">$1</mark>'
-                        );
-                        return (
-                          <div
-                            className={bodyClasses}
-                            style={{
-                              fontSize: `${state.fontSize * previewScale}px`,
-                              position: 'absolute',
-                              top: 0, left: 0, right: 0,
-                              color: 'transparent',
-                              pointerEvents: 'none',
-                              userSelect: 'none',
-                            }}
-                            dangerouslySetInnerHTML={{ __html: overlayHTML }}
-                          />
-                        );
-                      })()}
-
+                  {/* Chip do highlight ativo */}
+                  {state.highlightedText ? (
+                    <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 bg-white/10 border border-white/20 rounded-full px-2 py-0.5 max-w-[120px]">
+                        <Highlighter size={8} className="text-gray-300 flex-shrink-0" />
+                        <span className="text-[9px] text-gray-300 truncate">{state.highlightedText}</span>
+                      </div>
+                      <button onClick={clearHighlight} className="text-gray-600 hover:text-red-400 transition-colors">
+                        <X size={11} />
+                      </button>
                     </div>
-                  </div>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-gray-600 italic">Selecione uma escritura no menu lateral...</div>
-                )
-              )}
+                  ) : (
+                    <span className="text-[9px] text-gray-600 italic">Selecione para focar</span>
+                  )}
+                </div>
+              </div>
+              
             </div>
-            <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/60 to-transparent z-10 pointer-events-none" />
           </div>
         </div>
 
