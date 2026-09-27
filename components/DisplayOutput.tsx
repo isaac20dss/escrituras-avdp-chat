@@ -29,7 +29,7 @@ const makeFocusOverlayHTML = (html: string, phrase: string): string => {
 };
 
 // Tolerância de parada automática: quantas linhas em branco rolam após o fim do texto
-const END_TOLERANCE_LINES = 2;
+const END_TOLERANCE_LINES = 1;
 // Altura de linha do corpo (classe leading-relaxed = 1.625)
 const BODY_LINE_HEIGHT = 1.625;
 
