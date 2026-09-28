@@ -8,6 +8,7 @@ import { stateSyncService } from '../services/stateSync';
 import { youtubeService } from '../services/youtubeService';
 import { voiceService } from '../services/voiceService';
 import { audienceDatabaseService } from '../services/audienceDatabaseService';
+import { extractLoc, cleanCity } from '../services/locationParser';
 import Avatar from './Avatar';
 import TeleprompterCard, { CARD_WIDTH, CARD_HEIGHT, formatNamesList } from './TeleprompterCard';
 
@@ -131,80 +132,6 @@ const ControlPanel: React.FC = () => {
 
         // Extrair nomes únicos e localização (se presente em qualquer mensagem)
         const keywordLower = presenceKeyword.toLowerCase().trim();
-        const BRAZIL_STATES = new Set([
-          'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 
-          'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 
-          'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
-        ]);
-
-        const locStopWords = new Set([
-          'casa', 'aqui', 'hoje', 'ontem', 'longe', 'deus', 'jesus', 'amém', 'amem',
-          'boa', 'bom', 'boa noite', 'boa tarde', 'bom dia', 'noite', 'tarde', 'dia',
-          'paz', 'graça', 'glória', 'gloria', 'senhor', 'live', 'chat', 'vivo',
-          'todos', 'pessoal', 'gente', 'família', 'familia', 'igreja',
-          'com', 'meu', 'minha', 'nome', 'sou', 'assistindo', 'falando',
-        ]);
-
-        const formatCity = (raw: string): string => {
-          return raw.trim().split(/\s+/).map(w => {
-            const lower = w.toLowerCase();
-            if (['de', 'da', 'do', 'das', 'dos', 'e'].includes(lower) && raw.trim().split(/\s+/).length > 1) {
-              return lower;
-            }
-            return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
-          }).join(' ');
-        };
-
-        const extractLoc = (text: string): string | undefined => {
-          if (!text || text.length < 3) return undefined;
-
-          // Estratégia 1: Prefixo explícito + Cidade/UF  
-          // Ex: "sou de São Paulo/SP", "moro em Recife-PE", "assistindo de Salvador, BA"
-          const prefixWithUF = text.match(/\b(?:sou d[eao]|moro em|assistindo d[eao]|falando d[eao]|direto d[eao]|aqui d[eao]|lá d[eao])\s+([A-ZÀ-Úa-zà-ú][A-ZÀ-Úa-zà-ú\s]{1,25}?)\s*[\/\-,]\s*([A-Za-z]{2})\b/i);
-          if (prefixWithUF) {
-            const uf = prefixWithUF[2].toUpperCase();
-            if (BRAZIL_STATES.has(uf)) {
-              return `${formatCity(prefixWithUF[1])}, ${uf}`;
-            }
-          }
-
-          // Estratégia 2: Cidade + UF com separador (sem prefixo necessário)
-          // Ex: "Belo Horizonte/MG", "Curitiba-PR", "Manaus, AM", "Rio de Janeiro / RJ"
-          const cityUfSep = text.match(/\b([A-ZÀ-Úa-zà-ú][A-ZÀ-Úa-zà-ú\s]{1,25}?)\s*[\/\-,]\s*([A-Za-z]{2})\b/i);
-          if (cityUfSep) {
-            const uf = cityUfSep[2].toUpperCase();
-            const city = cityUfSep[1].trim();
-            if (BRAZIL_STATES.has(uf) && city.length >= 3 && !locStopWords.has(city.toLowerCase())) {
-              return `${formatCity(city)}, ${uf}`;
-            }
-          }
-
-          // Estratégia 3: Cidade + UF separados por espaço (sem separador)
-          // Ex: "Salvador BA", "São Paulo SP", "Recife PE"
-          const cityUfSpace = text.match(/\b([A-ZÀ-Úa-zà-ú][A-ZÀ-Úa-zà-ú\s]{2,25}?)\s+([A-Z]{2})\b/);
-          if (cityUfSpace) {
-            const uf = cityUfSpace[2].toUpperCase();
-            const city = cityUfSpace[1].trim();
-            if (BRAZIL_STATES.has(uf) && city.length >= 3 && !locStopWords.has(city.toLowerCase())) {
-              return `${formatCity(city)}, ${uf}`;
-            }
-          }
-
-          // Estratégia 4: Prefixo explícito sem UF
-          // Ex: "sou de Campinas", "moro em Florianópolis", "aqui de Manaus"
-          const prefixOnly = text.match(/\b(?:sou d[eao]|moro em|assistindo d[eao]|falando d[eao]|direto d[eao]|aqui d[eao]|lá d[eao])\s+([A-ZÀ-Úa-zà-ú][A-ZÀ-Úa-zà-ú\s]{2,30}?)(?:\s*[.!?;,]|\s+(?:com|e |assistindo|aqui|hoje|paz|amém|amem|bom|boa|glória|gloria)|$)/i);
-          if (prefixOnly) {
-            const rawLoc = prefixOnly[1].trim();
-            // Remove trailing stop words
-            const cleaned = rawLoc.replace(/\s+(?:com|e|assistindo|aqui|hoje|paz|amém|amem|bom|boa|glória|gloria)$/i, '').trim();
-            if (cleaned.length >= 3 && !locStopWords.has(cleaned.toLowerCase())) {
-              return formatCity(cleaned);
-            }
-          }
-
-          return undefined;
-        };
-
         const extractSelfPersonName = (text: string): string | undefined => {
           if (!text) return undefined;
           const match = text.match(/\b(?:sou\s+[oa]?|meu\s+nome\s+é|aqui\s+é\s+[oa]?)\s+([A-ZÀ-Úa-z]{3,20}(?:\s+[A-ZÀ-Úa-z]{3,20})?)\b/i);
@@ -250,9 +177,9 @@ const ControlPanel: React.FC = () => {
         };
 
         setPresenceUsers(prev => {
-          const userMap = new Map<string, { authorKey: string; author: string; avatarUrl?: string; location?: string; companions?: string[]; firstSeenTimestamp?: number }>();
+          const userMap = new Map<string, { authorKey: string; channelId?: string; author: string; avatarUrl?: string; location?: string; companions?: string[]; firstSeenTimestamp?: number }>();
           prev.forEach(u => {
-            const k = (u as any).authorKey || u.author;
+            const k = u.authorKey || u.author;
             if (k) {
               userMap.set(k, { authorKey: k, ...u, companions: u.companions ? [...u.companions] : undefined });
             }
@@ -269,17 +196,22 @@ const ControlPanel: React.FC = () => {
                 const foundComp = extractComp(m.text, effectiveAuthor, selfName);
 
                 // Busca a localização salva no banco de dados local
-                const savedLoc = audienceDatabaseService.getSavedLocation(effectiveAuthor) || audienceDatabaseService.getSavedLocation(m.author);
+                const savedLocRaw = audienceDatabaseService.getSavedLocation(effectiveAuthor, m.channelId) || audienceDatabaseService.getSavedLocation(m.author, m.channelId);
+                // Limpa também cidades salvas antes da correção (ex.: "Família Em Maringá, PR")
+                const savedLoc = savedLocRaw ? cleanCity(savedLocRaw) || undefined : undefined;
                 const effectiveLoc = foundLoc || savedLoc;
 
                 // Grava presença e estatísticas no banco de dados local
-                audienceDatabaseService.recordParticipant(effectiveAuthor, m.avatarUrl, effectiveLoc, foundComp);
+                audienceDatabaseService.recordParticipant(effectiveAuthor, m.avatarUrl, effectiveLoc, foundComp, m.channelId);
 
-                const mapKey = m.author;
+                // Chave oculta: ID do canal (duas pessoas com o mesmo nome não se juntam).
+                // Na tela continua aparecendo só o nome.
+                const mapKey = m.channelId ? `ch:${m.channelId}` : m.author;
 
                 if (!userMap.has(mapKey)) {
                   userMap.set(mapKey, { 
                     authorKey: mapKey,
+                    channelId: m.channelId,
                     author: effectiveAuthor, 
                     avatarUrl: m.avatarUrl,
                     location: effectiveLoc,
@@ -412,7 +344,7 @@ const ControlPanel: React.FC = () => {
     updateState({ presenceUsers: nextList });
 
     // Grava as alterações no banco de dados local para salvar para transmissões futuras
-    audienceDatabaseService.recordParticipant(newAuthor, user.avatarUrl, newLocation, newComps);
+    audienceDatabaseService.recordParticipant(newAuthor, user.avatarUrl, newLocation, newComps, user.channelId);
 
     setEditingUserIndex(null);
   };

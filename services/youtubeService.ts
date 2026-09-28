@@ -106,6 +106,7 @@ export const youtubeService = {
         return {
           id: item.id,
           author: authorName,
+          channelId: channelId || undefined,
           avatarUrl: avatarUrl,
           text: item.snippet.displayMessage,
           timestamp: new Date(item.snippet.publishedAt).getTime(),

@@ -1,5 +1,6 @@
 export interface AudienceRecord {
   author: string;
+  channelId?: string; // ID do canal no YouTube (oculto)
   avatarUrl?: string;
   totalStreams: number;
   lastStreamDate: string; // ISO YYYY-MM-DD
@@ -14,6 +15,28 @@ export interface AudienceDatabaseData {
 }
 
 const STORAGE_KEY = 'escrituras_audience_database_v1';
+
+const nameKey = (author: string) => author.toLowerCase().trim();
+const channelKey = (channelId: string) => `ch:${channelId}`;
+
+/**
+ * Chave do registro de uma pessoa. Com ID do canal, a chave é o ID — assim
+ * duas pessoas com o mesmo nome não se misturam. Registros antigos (salvos só
+ * pelo nome, sem ID) são migrados para a chave do ID na primeira vez que a
+ * pessoa aparece com ID.
+ */
+const resolveKey = (db: AudienceDatabaseData, author: string, channelId?: string): string => {
+  if (!channelId) return nameKey(author);
+  const key = channelKey(channelId);
+  if (!db.records[key]) {
+    const legacy = db.records[nameKey(author)];
+    if (legacy && !legacy.channelId) {
+      db.records[key] = { ...legacy, channelId };
+      delete db.records[nameKey(author)];
+    }
+  }
+  return key;
+};
 
 export const audienceDatabaseService = {
   /**
@@ -51,11 +74,12 @@ export const audienceDatabaseService = {
     author: string, 
     avatarUrl?: string, 
     location?: string, 
-    companions?: string[]
+    companions?: string[],
+    channelId?: string
   ): AudienceRecord | undefined {
     if (!author || typeof author !== 'string' || author.trim().length === 0) return undefined;
     const db = this.getDB();
-    const key = author.toLowerCase().trim();
+    const key = resolveKey(db, author, channelId);
     const today = new Date().toISOString().split('T')[0];
 
     let record = db.records[key];
@@ -63,6 +87,7 @@ export const audienceDatabaseService = {
     if (!record) {
       record = {
         author: author.trim(),
+        channelId,
         avatarUrl,
         totalStreams: 1,
         lastStreamDate: today,
@@ -102,11 +127,17 @@ export const audienceDatabaseService = {
   /**
    * Obtém a localização salva previamente de uma pessoa no banco de dados local
    */
-  getSavedLocation(author: string): string | undefined {
+  getSavedLocation(author: string, channelId?: string): string | undefined {
     if (!author || typeof author !== 'string' || author.trim().length === 0) return undefined;
     const db = this.getDB();
-    const key = author.toLowerCase().trim();
-    return db.records[key]?.defaultLocation;
+    if (channelId) {
+      const byChannel = db.records[channelKey(channelId)];
+      if (byChannel) return byChannel.defaultLocation;
+    }
+    // Registro antigo salvo só pelo nome — vale apenas se não pertence a outro canal
+    const byName = db.records[nameKey(author)];
+    if (byName && (!byName.channelId || byName.channelId === channelId)) return byName.defaultLocation;
+    return undefined;
   },
 
   /**

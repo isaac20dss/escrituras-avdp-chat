@@ -118,7 +118,7 @@ const TeleprompterCard: React.FC<TeleprompterCardProps> = ({
                     const allNames = formatNamesList([authorName, ...companions]);
 
                     return (
-                      <div key={user.author || idx} className="bg-black/60 border border-white/10 rounded-xl p-5 shadow-lg backdrop-blur-sm animate-in slide-in-from-bottom-2 fade-in duration-300 flex items-center gap-4">
+                      <div key={user.authorKey || user.author || idx} className="bg-black/60 border border-white/10 rounded-xl p-5 shadow-lg backdrop-blur-sm animate-in slide-in-from-bottom-2 fade-in duration-300 flex items-center gap-4">
                         <Avatar
                           url={user.avatarUrl}
                           name={authorName}

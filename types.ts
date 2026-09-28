@@ -22,12 +22,15 @@ export interface TeleprompterState {
 export interface ChatMessage {
   id: string;
   author: string;
+  channelId?: string; // ID do canal no YouTube (oculto; identifica a pessoa)
   avatarUrl?: string;
   text: string;
   timestamp: number;
 }
 
 export interface PresenceUser {
+  authorKey?: string; // Chave interna oculta (ID do canal) — evita juntar pessoas com o mesmo nome
+  channelId?: string;
   author: string;
   avatarUrl?: string;
   location?: string;
