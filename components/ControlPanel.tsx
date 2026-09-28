@@ -9,7 +9,7 @@ import { youtubeService } from '../services/youtubeService';
 import { voiceService } from '../services/voiceService';
 import { audienceDatabaseService } from '../services/audienceDatabaseService';
 import { extractLoc, cleanCity } from '../services/locationParser';
-import { mentionsOwnFamily, mergeCompanions, FAMILY_COMPANION } from '../services/companionParser';
+import { extractCompanions, mergeCompanions } from '../services/companionParser';
 import Avatar from './Avatar';
 import TeleprompterCard, { CARD_WIDTH, CARD_HEIGHT, formatNamesList } from './TeleprompterCard';
 
@@ -146,37 +146,6 @@ const ControlPanel: React.FC = () => {
           return undefined;
         };
 
-        const extractComp = (text: string, currentAuthorName: string, selfName?: string): string[] => {
-          if (!text || text.length < 5) return [];
-          const match = text.match(/\b(?:com|junto com|assistindo com|com a|com o|com minha|com meu|eu e|eu e a|eu e o)\s+([^.\n!?:;]+)/i);
-          if (!match) return [];
-
-          const rawSegment = match[1].trim();
-          const cleanSegment = rawSegment
-            .split(/\b(?:de|em|moro em|assistindo de|falando de|direto de)\b/i)[0]
-            .replace(/\b(?:e esposa|e marido|e filho|e filha|e irmao|e irma|minha|meu|familia|familiares|todos|aqui|hoje|juntos)\b/gi, ' ')
-            .trim();
-
-          const parts = cleanSegment
-            .split(/\s*(?:,| e | & )\s*/i)
-            .map(p => p.replace(/^(?:a|o|minha|meu|esposa|marido|filho|filha|irmao|irma)\s+/i, '').trim())
-            .filter(p => p.length >= 2 && p.length <= 25 && !/^(casa|igreja|tv|live|chat|deus|jesus|amem|pessoal|todos)$/i.test(p));
-
-          const authorLower = currentAuthorName.toLowerCase();
-          const selfLower = selfName?.toLowerCase();
-
-          const unique = Array.from(new Set(parts))
-            .map(name => name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' '))
-            .filter(name => {
-              const nameLower = name.toLowerCase();
-              if (authorLower.includes(nameLower) || nameLower.includes(authorLower)) return false;
-              if (selfLower && (selfLower.includes(nameLower) || nameLower.includes(selfLower))) return false;
-              return true;
-            });
-
-          return unique.slice(0, 5);
-        };
-
         setPresenceUsers(prev => {
           const userMap = new Map<string, { authorKey: string; channelId?: string; author: string; avatarUrl?: string; location?: string; companions?: string[]; firstSeenTimestamp?: number }>();
           prev.forEach(u => {
@@ -194,11 +163,8 @@ const ControlPanel: React.FC = () => {
                 const foundLoc = extractLoc(m.text);
                 const selfName = extractSelfPersonName(m.text);
                 const effectiveAuthor = selfName || m.author;
-                // "e família", "com a família"... entra como acompanhante "Família"
-                const foundComp = mergeCompanions(
-                  extractComp(m.text, effectiveAuthor, selfName),
-                  mentionsOwnFamily(m.text) ? [FAMILY_COMPANION] : []
-                );
+                // Nomes e parentes ("eu e meu marido", "com a família") viram acompanhantes
+                const foundComp = extractCompanions(m.text, effectiveAuthor, selfName);
 
                 // Busca a localização salva no banco de dados local
                 const savedLocRaw = audienceDatabaseService.getSavedLocation(effectiveAuthor, m.channelId) || audienceDatabaseService.getSavedLocation(m.author, m.channelId);
