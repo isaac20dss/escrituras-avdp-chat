@@ -9,6 +9,7 @@ import { youtubeService } from '../services/youtubeService';
 import { voiceService } from '../services/voiceService';
 import { audienceDatabaseService } from '../services/audienceDatabaseService';
 import { extractLoc, cleanCity } from '../services/locationParser';
+import { mentionsOwnFamily, mergeCompanions, FAMILY_COMPANION } from '../services/companionParser';
 import Avatar from './Avatar';
 import TeleprompterCard, { CARD_WIDTH, CARD_HEIGHT, formatNamesList } from './TeleprompterCard';
 
@@ -193,7 +194,11 @@ const ControlPanel: React.FC = () => {
                 const foundLoc = extractLoc(m.text);
                 const selfName = extractSelfPersonName(m.text);
                 const effectiveAuthor = selfName || m.author;
-                const foundComp = extractComp(m.text, effectiveAuthor, selfName);
+                // "e família", "com a família"... entra como acompanhante "Família"
+                const foundComp = mergeCompanions(
+                  extractComp(m.text, effectiveAuthor, selfName),
+                  mentionsOwnFamily(m.text) ? [FAMILY_COMPANION] : []
+                );
 
                 // Busca a localização salva no banco de dados local
                 const savedLocRaw = audienceDatabaseService.getSavedLocation(effectiveAuthor, m.channelId) || audienceDatabaseService.getSavedLocation(m.author, m.channelId);
@@ -242,7 +247,7 @@ const ControlPanel: React.FC = () => {
                     const currentComps = existing.companions || [];
                     const authorLower = (existing.author || '').toLowerCase();
                     const newCompsFiltered = foundComp.filter(c => c && !authorLower.includes(c.toLowerCase()) && !c.toLowerCase().includes(authorLower));
-                    const combined = Array.from(new Set([...currentComps, ...newCompsFiltered]));
+                    const combined = mergeCompanions(currentComps, newCompsFiltered);
                     if (combined.length !== currentComps.length) {
                       existing.companions = combined;
                       updated = true;
